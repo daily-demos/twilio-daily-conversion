@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Load Twilio configuration from .env config file - the following environment
@@ -7,14 +7,12 @@
  * process.env.TWILIO_API_KEY
  * process.env.TWILIO_API_SECRET
  */
-require('dotenv').load();
+require("dotenv").load();
 
-const express = require('express');
-const http = require('http');
-const path = require('path');
-const { jwt: { AccessToken } } = require('twilio');
+const express = require("express");
+const http = require("http");
+const path = require("path");
 
-const VideoGrant = AccessToken.VideoGrant;
 
 // Max. period that a Participant is allowed to be in a Room (currently 14400 seconds or 4 hours)
 const MAX_ALLOWED_SESSION_DURATION = 14400;
@@ -24,38 +22,38 @@ const app = express();
 
 // Set up the paths for the examples.
 [
-  'bandwidthconstraints',
-  'codecpreferences',
-  'dominantspeaker',
-  'localvideofilter',
-  'localvideosnapshot',
-  'mediadevices',
-  'networkquality',
-  'reconnection',
-  'screenshare',
-  'localmediacontrols',
-  'remotereconnection',
-  'datatracks',
-  'manualrenderhint',
-  'autorenderhint'
-].forEach(example => {
+  "bandwidthconstraints",
+  "codecpreferences",
+  "dominantspeaker",
+  "localvideofilter",
+  "localvideosnapshot",
+  "mediadevices",
+  "networkquality",
+  "reconnection",
+  "screenshare",
+  "localmediacontrols",
+  "remotereconnection",
+  "datatracks",
+  "manualrenderhint",
+  "autorenderhint",
+].forEach((example) => {
   const examplePath = path.join(__dirname, `../examples/${example}/public`);
   app.use(`/${example}`, express.static(examplePath));
 });
 
 // Set up the path for the quickstart.
-const quickstartPath = path.join(__dirname, '../quickstart/public');
-app.use('/quickstart', express.static(quickstartPath));
+const quickstartPath = path.join(__dirname, "../quickstart/public");
+app.use("/quickstart", express.static(quickstartPath));
 
 // Set up the path for the examples page.
-const examplesPath = path.join(__dirname, '../examples');
-app.use('/examples', express.static(examplesPath));
+const examplesPath = path.join(__dirname, "../examples");
+app.use("/examples", express.static(examplesPath));
 
 /**
  * Default to the Quick Start application.
  */
-app.get('/', (request, response) => {
-  response.redirect('/quickstart');
+app.get("/", (request, response) => {
+  response.redirect("/quickstart");
 });
 
 /**
@@ -63,32 +61,98 @@ app.get('/', (request, response) => {
  * username for the client requesting a token, and takes a device ID as a query
  * parameter.
  */
-app.get('/token', function(request, response) {
-  const { identity } = request.query;
+app.get('/token', function (request, response) {
+  console.log('getting daily token:', request)
+  const query = request.query;
+  const userName = query.identity;
+  const roomName = query.roomName;
 
+  const roomData = await createRoom(roomName);
   // Create an access token which we will sign and return to the client,
   // containing the grant we just created.
-  const token = new AccessToken(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_API_KEY,
-    process.env.TWILIO_API_SECRET,
-    { ttl: MAX_ALLOWED_SESSION_DURATION }
-  );
-
-  // Assign the generated identity to the token.
-  token.identity = identity;
-
-  // Grant the access token Twilio Video capabilities.
-  const grant = new VideoGrant();
-  token.addGrant(grant);
-
-  // Serialize the token to a JWT string.
-  response.send(token.toJwt());
+  const token = await getMeetingToken(roomName, userName);
+  console.log('Daily token: ', token)
+  const res = {
+    token: token,
+    roomURL: roomData.url,
+  }
+  response.send(json.stringify(res));
 });
 
 // Create http server and run it.
 const server = http.createServer(app);
 const port = process.env.PORT || 3000;
-server.listen(port, function() {
+server.listen(port, function () {
   console.log('Express server running on *:' + port);
 });
+
+const dailyAPIURL = `https://api.${dailyAPIDomain}/v1`;
+
+async function createRoom(roomName) {
+  const apiKey = process.env.DAILY_API_KEY;
+
+  // Prepare our desired room properties. Participants will start with
+  // mics and cams off, and the room will expire in 24 hours.
+  const req = {
+    properties: {
+      exp: Math.floor(Date.now() / 1000) + 86400,
+      start_audio_off: true,
+      start_video_off: true,
+      name: roomName,
+    },
+  };
+
+  // Prepare our headers, containing our Daily API key
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  const url = `${dailyAPIURL}/rooms/`;
+  const data = JSON.stringify(req);
+
+  const roomErrMsg = 'failed to create room';
+
+  const res = await axios.post(url, data, { headers }).catch((error) => {
+    console.error(roomErrMsg, res);
+    throw new Error(`${roomErrMsg}: ${error})`);
+  });
+
+  if (res.status !== 200 || !res.data) {
+    console.error('unexpected room creation response:', res);
+    throw new Error(roomErrMsg);
+  }
+  // Cast Daily's response to our room data interface.
+  const roomData = res.data;
+
+  return roomData;
+}
+
+
+// getMeetingToken() obtains a meeting token for a room from Daily
+async function getMeetingToken(roomName, userName) {
+  const req = {
+    properties: {
+      room_name: roomName,
+      user_name: userName,
+      exp: Math.floor(Date.now() / 1000) + 86400,
+      is_owner: true,
+    },
+  };
+
+  const data = JSON.stringify(req);
+  const headers = {
+    Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+  const url = `${dailyAPIURL}/meeting-tokens/`;
+
+  const errMsg = 'failed to create meeting token';
+  const res = await axios.post(url, data, { headers }).catch((error) => {
+    throw new Error(`${errMsg}: ${error})`);
+  });
+  if (res.status !== 200) {
+    throw new Error(`${errMsg}: got status ${res.status})`);
+  }
+  return res.data?.token;
+}

@@ -1,5 +1,6 @@
 'use strict';
 
+const { default: DailyIframe } = require('@daily-co/daily-js');
 const { connect, createLocalVideoTrack, Logger } = require('twilio-video');
 const { isMobile } = require('./browser');
 
@@ -59,9 +60,8 @@ function setActiveParticipant(participant) {
  * Set the current active Participant in the Room.
  * @param room - the Room which contains the current active Participant
  */
-function setCurrentActiveParticipant(room) {
-  const { dominantSpeaker, localParticipant } = room;
-  setActiveParticipant(dominantSpeaker || localParticipant);
+function setCurrentActiveParticipant(activeSpeaker, localParticipant) {
+  setActiveParticipant(activeSpeaker || localParticipant);
 }
 
 /**
@@ -221,66 +221,66 @@ function trackPublished(publication, participant) {
  * @param token - the AccessToken used to join a Room
  * @param connectOptions - the ConnectOptions used to join a Room
  */
-async function joinRoom(token, connectOptions) {
+async function joinRoom(roomURL, token, connectOptions) {
   // Comment the next two lines to disable verbose logging.
-  const logger = Logger.getLogger('twilio-video');
+  const logger = Logger.getLogger('daily-video');
   logger.setLevel('debug');
 
   // Join to the Room with the given AccessToken and ConnectOptions.
-  const room = await connect(token, connectOptions);
+  const callObject = DailyIframe.createCallObject({
+    url: roomURL,
+    token: token,
+  });
+
+  callObject
+    .on('joined-meeting', (ev) => {
+      const p = ev.participant;
+      participantConnected(p, callObject);
+
+      // Set the current active Participant.
+      setCurrentActiveParticipant(p, p);
+    })
+    .on('participant-joined', (ev) => {
+      const p = ev.participant;
+      participantConnected(p, callObject);
+    })
+    .on('participant-left', (ev) => {
+      const p = ev.participant;
+      participantDisconnected(p, callObject);
+    })
+    .on('active-speaker-changed', (ev) => {
+      if (!isActiveParticipantPinned) {
+        setCurrentActiveParticipant(ev, callObject.participants().local);
+      }
+    });
 
   // Save the LocalVideoTrack.
-  let localVideoTrack = Array.from(room.localParticipant.videoTracks.values())[0].track;
+  let localVideoTrack = Array.from(
+    room.localParticipant.videoTracks.values()
+  )[0].track;
 
   // Make the Room available in the JavaScript console for debugging.
   window.room = room;
 
-  // Handle the LocalParticipant's media.
-  participantConnected(room.localParticipant, room);
-
-  // Subscribe to the media published by RemoteParticipants already in the Room.
-  room.participants.forEach(participant => {
-    participantConnected(participant, room);
-  });
-
-  // Subscribe to the media published by RemoteParticipants joining the Room later.
-  room.on('participantConnected', participant => {
-    participantConnected(participant, room);
-  });
-
-  // Handle a disconnected RemoteParticipant.
-  room.on('participantDisconnected', participant => {
-    participantDisconnected(participant, room);
-  });
-
-  // Set the current active Participant.
-  setCurrentActiveParticipant(room);
-
-  // Update the active Participant when changed, only if the user has not
-  // pinned any particular Participant as the active Participant.
-  room.on('dominantSpeakerChanged', () => {
-    if (!isActiveParticipantPinned) {
-      setCurrentActiveParticipant(room);
-    }
-  });
-
   // Leave the Room when the "Leave Room" button is clicked.
   $leave.click(function onLeave() {
     $leave.off('click', onLeave);
-    room.disconnect();
+    callObject.leave();
   });
+
+  callObject.join();
 
   return new Promise((resolve, reject) => {
     // Leave the Room when the "beforeunload" event is fired.
     window.onbeforeunload = () => {
-      room.disconnect();
+      callObject.leave();
     };
 
     if (isMobile) {
       // TODO(mmalavalli): investigate why "pagehide" is not working in iOS Safari.
       // In iOS Safari, "beforeunload" is not fired, so use "pagehide" instead.
       window.onpagehide = () => {
-        room.disconnect();
+        callObject.disconnect();
       };
 
       // On mobile browsers, use "visibilitychange" event to determine when
@@ -289,18 +289,16 @@ async function joinRoom(token, connectOptions) {
         if (document.visibilityState === 'hidden') {
           // When the app is backgrounded, your app can no longer capture
           // video frames. So, stop and unpublish the LocalVideoTrack.
-          localVideoTrack.stop();
-          room.localParticipant.unpublishTrack(localVideoTrack);
+          callObject.setLocalVideo(false);
         } else {
           // When the app is foregrounded, your app can now continue to
           // capture video frames. So, publish a new LocalVideoTrack.
-          localVideoTrack = await createLocalVideoTrack(connectOptions.video);
-          await room.localParticipant.publishTrack(localVideoTrack);
+          callObject.setLocalVideo(true);
         }
       };
     }
 
-    room.once('disconnected', (room, error) => {
+    callObject.on('left-meeting', (ev) => {
       // Clear the event handlers on document and window..
       window.onbeforeunload = null;
       if (isMobile) {
@@ -308,14 +306,14 @@ async function joinRoom(token, connectOptions) {
         document.onvisibilitychange = null;
       }
 
-      // Stop the LocalVideoTrack.
-      localVideoTrack.stop();
-
       // Handle the disconnected LocalParticipant.
-      participantDisconnected(room.localParticipant, room);
+      const participants = callObject.participants();
+
+      const p = participants.local;
+      participantDisconnected(p, callObject);
 
       // Handle the disconnected RemoteParticipants.
-      room.participants.forEach(participant => {
+      participants.forEach((participant) => {
         participantDisconnected(participant, room);
       });
 

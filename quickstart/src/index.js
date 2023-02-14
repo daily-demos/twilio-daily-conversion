@@ -82,10 +82,15 @@ async function selectAndJoinRoom(error = null) {
 
   try {
     // Fetch an AccessToken to join the Room.
-    const response = await fetch(`/token?identity=${identity}`);
+    const response = await fetch(`/token?identity=${identity}&roomName=${roomName}`);
+
 
     // Extract the AccessToken from the Response.
-    const token = await response.text();
+    const data = response.text();
+    const resObj = JSON.parse(data);
+    
+    const token = resObj.token,
+    const roomURL = resObj.roomURL;
 
     // Add the specified audio device ID to ConnectOptions.
     connectOptions.audio = { deviceId: { exact: deviceIds.audio } };
@@ -97,7 +102,7 @@ async function selectAndJoinRoom(error = null) {
     connectOptions.video.deviceId = { exact: deviceIds.video };
 
     // Join the Room.
-    await joinRoom(token, connectOptions);
+    await joinRoom(roomURL, token, connectOptions);
 
     // After the video session, display the room selection modal.
     return selectAndJoinRoom();
@@ -112,10 +117,14 @@ async function selectAndJoinRoom(error = null) {
 async function selectCamera() {
   if (deviceIds.video === null) {
     try {
-      deviceIds.video = await selectMedia('video', $selectCameraModal, videoTrack => {
-        const $video = $('video', $selectCameraModal);
-        videoTrack.attach($video.get(0))
-      });
+      deviceIds.video = await selectMedia(
+        'video',
+        $selectCameraModal,
+        (videoTrack) => {
+          const $video = $('video', $selectCameraModal);
+          videoTrack.attach($video.get(0));
+        }
+      );
     } catch (error) {
       showError($showErrorModal, error);
       return;
