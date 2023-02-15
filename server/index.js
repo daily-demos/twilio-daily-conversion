@@ -74,7 +74,6 @@ app.get('/token', async function (request, response) {
   // Create an access token which we will sign and return to the client,
   // containing the grant we just created.
   const token = await getMeetingToken(roomName, userName);
-  console.log('Daily token: ', token);
   const res = {
     token: token,
     roomURL: roomData.url,
@@ -90,12 +89,35 @@ server.listen(port, function () {
 });
 
 async function getRoom(roomName) {
-  return false;
+  const apiKey = process.env.DAILY_API_KEY;
+  // Prepare our headers, containing our Daily API key
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  const url = `${dailyAPIURL}/rooms/${roomName}`;
+
+  const res = await axios
+    .get(url, {
+      headers: headers,
+    })
+    .catch((error) => {
+      console.error(roomErrMsg, error);
+      throw new Error(`${roomErrMsg}: ${error})`);
+    });
+
+  if (res.status !== 200 || !res.data) {
+    console.error('unexpected room creation response:', res);
+    throw new Error(roomErrMsg);
+  }
+  // Cast Daily's response to our room data interface.
+  const roomData = res.data;
+  
+  return roomData;
 }
 
 async function createRoom(roomName) {
   const apiKey = process.env.DAILY_API_KEY;
-  console.log('API key:', apiKey, process.env);
   // Prepare our desired room properties. Participants will start with
   // mics and cams off, and the room will expire in 24 hours.
   const req = {
