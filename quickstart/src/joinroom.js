@@ -21,15 +21,16 @@ let isActiveParticipantPinned = false;
  * @param participant - the active Participant
  */
 function setActiveParticipant(participant) {
+  console.log("setActiveParticipant()", participant, activeParticipant)
   if (activeParticipant) {
-    const $activeParticipant = $(`div#${activeParticipant.sid}`, $participants);
+    const $activeParticipant = $(`div#${activeParticipant.session_id}`, $participants);
     $activeParticipant.removeClass('active');
     $activeParticipant.removeClass('pinned');
-
+    
+    const videoTrack = activeParticipant.tracks.video.persistentTrack;
     // Detach any existing VideoTrack of the active Participant.
-    const { track: activeTrack } = Array.from(activeParticipant.videoTracks.values())[0] || {};
     if (activeTrack) {
-      activeTrack.detach($activeVideo.get(0));
+      $activeVideo.get(0).removeTrack(videoTrack);
       $activeVideo.css('opacity', '0');
     }
   }
@@ -48,11 +49,9 @@ function setActiveParticipant(participant) {
   }
 
   // Attach the new active Participant's video.
-  const videoTrack = participant.tracks.video;
-  console.log('LIZA vidoe track: ', videoTrack);
-  const { track } = Array.from(videoTrack.persistentTrack)[0] || {};
-  if (track) {
-    updateTrackIfNeeded($activeVideo.get(0), track);
+  const videoTrack = participant.tracks.video.persistentTrack;
+  if (videoTrack) {
+    updateTrackIfNeeded($activeVideo.get(0), videoTrack);
     $activeVideo.css('opacity', '');
   }
 
@@ -74,7 +73,6 @@ function setCurrentActiveParticipant(activeSpeaker, localParticipant) {
  * @param room - the Room that the Participant joined
  */
 function setupParticipantContainer(participant) {
-  console.log('LIZA setupParticipantConatiner', participant);
   const sid = participant.session_id;
 
   // Safeguard against duplicate containers
@@ -140,7 +138,6 @@ function attachTrack(track, participant) {
   const query = `div#${participant.session_id} > ${track.kind}`;
   let $media = $(query, $participants);
   if ($media.length === 0) {
-    console.log('attachTrack() media does not exist');
     setupParticipantContainer(participant);
     $media = $(query, $participants);
   }
@@ -148,7 +145,6 @@ function attachTrack(track, participant) {
   $media.css('opacity', '');
   const media = $media.get(0);
 
-  console.log('attachTrack() media2:', media);
   updateTrackIfNeeded(media, track);
 
   // If the attached Track is a VideoTrack that is published by the active
@@ -220,7 +216,7 @@ function participantConnected(participant, room) {
  */
 function participantDisconnected(participant) {
   // Remove the Participant's media container.
-  $(`div#${participant.sid}`, $participants).remove();
+  $(`div#${participant.session_id}`, $participants).remove();
 }
 
 /**
@@ -241,7 +237,6 @@ async function joinRoom(roomURL, token, connectOptions) {
 
   callObject
     .on('joined-meeting', (ev) => {
-      console.log('joined-meeting:', ev);
       const p = ev.participants.local;
       participantConnected(p, callObject);
 

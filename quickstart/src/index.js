@@ -85,7 +85,6 @@ async function selectAndJoinRoom(error = null) {
 
     // Extract the AccessToken from the Response.
     const data = await response.text();
-    console.log('LIZA data:', data);
     const resObj = JSON.parse(data);
 
     const token = resObj.token;
