@@ -96,19 +96,24 @@ async function getRoom(roomName) {
     'Content-Type': 'application/json',
   };
   const url = `${dailyAPIURL}/rooms/${roomName}`;
+  const errMsg = "Failed to get room information."
 
-  const res = await axios
+  let res;
+  try {
+    res = await axios
     .get(url, {
       headers: headers,
     })
-    .catch((error) => {
-      console.error(roomErrMsg, error);
-      throw new Error(`${roomErrMsg}: ${error})`);
-    });
+  } catch(error) {
+    if (error.response?.status === 404) {
+      return null;
+    }
+    throw new Error(`${errMsg}: ${error})`);
+  }
 
   if (res.status !== 200 || !res.data) {
     console.error('unexpected room creation response:', res);
-    throw new Error(roomErrMsg);
+    throw new Error(errMsg);
   }
   // Cast Daily's response to our room data interface.
   const roomData = res.data;

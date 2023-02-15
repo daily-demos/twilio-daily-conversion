@@ -52,7 +52,7 @@ function setActiveParticipant(participant) {
   console.log('LIZA vidoe track: ', videoTrack);
   const { track } = Array.from(videoTrack.persistentTrack)[0] || {};
   if (track) {
-    $activeVideo.get(0).srcObject.addTrack(track);
+    updateTrackIfNeeded($activeVideo.get(0), track);
     $activeVideo.css('opacity', '');
   }
 
@@ -218,14 +218,7 @@ function participantConnected(participant, room) {
  * @param participant - the disconnected Participant
  * @param room - the Room that the Participant disconnected from
  */
-function participantDisconnected(participant, room) {
-  // If the disconnected Participant was pinned as the active Participant, then
-  // unpin it so that the active Participant can be updated.
-  if (activeParticipant === participant && isActiveParticipantPinned) {
-    isActiveParticipantPinned = false;
-    setCurrentActiveParticipant(room);
-  }
-
+function participantDisconnected(participant) {
   // Remove the Participant's media container.
   $(`div#${participant.sid}`, $participants).remove();
 }
@@ -261,7 +254,7 @@ async function joinRoom(roomURL, token, connectOptions) {
     })
     .on('participant-left', (ev) => {
       const p = ev.participant;
-      participantDisconnected(p, callObject);
+      participantDisconnected(p);
     })
     .on('active-speaker-changed', (ev) => {
       if (!isActiveParticipantPinned) {
