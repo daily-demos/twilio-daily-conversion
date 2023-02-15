@@ -1,9 +1,8 @@
 'use strict';
 
-const { default: DailyIframe } = require('@daily-co/daily-js');
+const DailyIframe = require('@daily-co/daily-js');
 const { connect, createLocalVideoTrack, Logger } = require('twilio-video');
 const { isMobile } = require('./browser');
-
 const $leave = $('#leave-room');
 const $room = $('#room');
 const $activeParticipant = $('div#active-participant > div.participant.main', $room);
@@ -37,7 +36,10 @@ function setActiveParticipant(participant) {
 
   // Set the new active Participant.
   activeParticipant = participant;
-  const { identity, sid } = participant;
+  const userName = participant.user_name;
+  const sid = participant.session_id;
+  const identity = userName ? userName : sid;
+
   const $participant = $(`div#${sid}`, $participants);
 
   $participant.addClass('active');
@@ -46,9 +48,11 @@ function setActiveParticipant(participant) {
   }
 
   // Attach the new active Participant's video.
-  const { track } = Array.from(participant.videoTracks.values())[0] || {};
+  const videoTrack = participant.tracks.video;
+  console.log('LIZA vidoe track: ', videoTrack);
+  const { track } = Array.from(videoTrack.persistentTrack)[0] || {};
   if (track) {
-    track.attach($activeVideo.get(0));
+    $activeVideo.get(0).srcObject.addTrack(track);
     $activeVideo.css('opacity', '');
   }
 
@@ -69,12 +73,23 @@ function setCurrentActiveParticipant(activeSpeaker, localParticipant) {
  * @param participant - the Participant whose media container is to be set up
  * @param room - the Room that the Participant joined
  */
-function setupParticipantContainer(participant, room) {
-  const { identity, sid } = participant;
+function setupParticipantContainer(participant) {
+  console.log('LIZA setupParticipantConatiner', participant);
+  const sid = participant.session_id;
+
+  // Safeguard against duplicate containers
+  const existingContainer = document.getElementById(sid);
+  if (existingContainer) return;
+
+  const userName = participant.user_name;
+  const identity = userName ? userName : sid;
 
   // Add a container for the Participant's media.
-  const $container = $(`<div class="participant" data-identity="${identity}" id="${sid}">
-    <audio autoplay ${participant === room.localParticipant ? 'muted' : ''} style="opacity: 0"></audio>
+  const $container =
+    $(`<div class="participant" data-identity="${identity}" id="${sid}">
+    <audio autoplay ${
+      participant.isLocal ? 'muted' : ''
+    } style="opacity: 0"></audio>
     <video autoplay muted playsinline style="opacity: 0"></video>
   </div>`);
 
@@ -122,15 +137,46 @@ function setVideoPriority(participant, priority) {
  */
 function attachTrack(track, participant) {
   // Attach the Participant's Track to the thumbnail.
-  const $media = $(`div#${participant.sid} > ${track.kind}`, $participants);
+  const query = `div#${participant.session_id} > ${track.kind}`;
+  let $media = $(query, $participants);
+  if ($media.length === 0) {
+    console.log('attachTrack() media does not exist');
+    setupParticipantContainer(participant);
+    $media = $(query, $participants);
+  }
+
   $media.css('opacity', '');
-  track.attach($media.get(0));
+  const media = $media.get(0);
+
+  console.log('attachTrack() media2:', media);
+  updateTrackIfNeeded(media, track);
 
   // If the attached Track is a VideoTrack that is published by the active
   // Participant, then attach it to the main video as well.
   if (track.kind === 'video' && participant === activeParticipant) {
-    track.attach($activeVideo.get(0));
+    updateTrackIfNeeded($activeVideo.get(0), track);
     $activeVideo.css('opacity', '');
+  }
+}
+
+function updateTrackIfNeeded(videoElement, newTrack) {
+  const src = videoElement.srcObject;
+  if (!src) {
+    videoElement.srcObject = new MediaStream([newTrack]);
+  } else {
+    const existingTracks = src.getTracks();
+    const l = existingTracks.length;
+    switch (l) {
+      case 0:
+        break;
+      case 1:
+        src.removeTrack(existingTracks[0]);
+        break;
+      default:
+        console.warn(`Unexpected count of tracks. Expected 1, got ${l}`);
+        break;
+    }
+    src.addTrack(newTrack);
   }
 }
 
@@ -144,7 +190,7 @@ function detachTrack(track, participant) {
   const $media = $(`div#${participant.sid} > ${track.kind}`, $participants);
   const mediaEl = $media.get(0);
   $media.css('opacity', '0');
-  track.detach(mediaEl);
+  mediaEl.tracks.remove(track);
   mediaEl.srcObject = null;
 
   // If the detached Track is a VideoTrack that is published by the active
@@ -165,16 +211,6 @@ function detachTrack(track, participant) {
 function participantConnected(participant, room) {
   // Set up the Participant's media container.
   setupParticipantContainer(participant, room);
-
-  // Handle the TrackPublications already published by the Participant.
-  participant.tracks.forEach(publication => {
-    trackPublished(publication, participant);
-  });
-
-  // Handle theTrackPublications that will be published by the Participant later.
-  participant.on('trackPublished', publication => {
-    trackPublished(publication, participant);
-  });
 }
 
 /**
@@ -195,28 +231,6 @@ function participantDisconnected(participant, room) {
 }
 
 /**
- * Handle to the TrackPublication's media.
- * @param publication - the TrackPublication
- * @param participant - the publishing Participant
- */
-function trackPublished(publication, participant) {
-  // If the TrackPublication is already subscribed to, then attach the Track to the DOM.
-  if (publication.track) {
-    attachTrack(publication.track, participant);
-  }
-
-  // Once the TrackPublication is subscribed to, attach the Track to the DOM.
-  publication.on('subscribed', track => {
-    attachTrack(track, participant);
-  });
-
-  // Once the TrackPublication is unsubscribed from, detach the Track from the DOM.
-  publication.on('unsubscribed', track => {
-    detachTrack(track, participant);
-  });
-}
-
-/**
  * Join a Room.
  * @param token - the AccessToken used to join a Room
  * @param connectOptions - the ConnectOptions used to join a Room
@@ -234,7 +248,8 @@ async function joinRoom(roomURL, token, connectOptions) {
 
   callObject
     .on('joined-meeting', (ev) => {
-      const p = ev.participant;
+      console.log('joined-meeting:', ev);
+      const p = ev.participants.local;
       participantConnected(p, callObject);
 
       // Set the current active Participant.
@@ -252,12 +267,17 @@ async function joinRoom(roomURL, token, connectOptions) {
       if (!isActiveParticipantPinned) {
         setCurrentActiveParticipant(ev, callObject.participants().local);
       }
+    })
+    .on('track-started', (ev) => {
+      const p = ev.participant;
+      const track = ev.track;
+      attachTrack(track, p);
+    })
+    .on('track-stopped', (ev) => {
+      const p = ev.participant;
+      const track = ev.track;
+      detachTrack(track, p);
     });
-
-  // Save the LocalVideoTrack.
-  let localVideoTrack = Array.from(
-    room.localParticipant.videoTracks.values()
-  )[0].track;
 
   // Make the Room available in the JavaScript console for debugging.
   window.room = room;

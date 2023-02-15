@@ -25,8 +25,8 @@ const connectOptions = {
       dominantSpeakerPriority: 'high',
       mode: 'collaboration',
       clientTrackSwitchOffControl: 'auto',
-      contentPreferencesMode: 'auto'
-    }
+      contentPreferencesMode: 'auto',
+    },
   },
 
   // Available only in Small Group or Group Rooms only. Please set "Room Type"
@@ -44,15 +44,12 @@ const connectOptions = {
   preferredVideoCodecs: [{ codec: 'VP8', simulcast: true }],
 
   // Capture 720p video @ 24 fps.
-  video: { height: 720, frameRate: 24, width: 1280 }
+  video: { height: 720, frameRate: 24, width: 1280 },
 };
 
 // For mobile browsers, limit the maximum incoming video bitrate to 2.5 Mbps.
 if (isMobile) {
-  connectOptions
-    .bandwidthProfile
-    .video
-    .maxSubscriptionBitrate = 2500000;
+  connectOptions.bandwidthProfile.video.maxSubscriptionBitrate = 2500000;
 }
 
 // On mobile browsers, there is the possibility of not getting any media even
@@ -62,7 +59,7 @@ if (isMobile) {
 // https://www.twilio.com/docs/video/build-js-video-application-recommendations-and-best-practices
 const deviceIds = {
   audio: isMobile ? null : localStorage.getItem('audioDeviceId'),
-  video: isMobile ? null : localStorage.getItem('videoDeviceId')
+  video: isMobile ? null : localStorage.getItem('videoDeviceId'),
 };
 
 /**
@@ -82,14 +79,16 @@ async function selectAndJoinRoom(error = null) {
 
   try {
     // Fetch an AccessToken to join the Room.
-    const response = await fetch(`/token?identity=${identity}&roomName=${roomName}`);
-
+    const response = await fetch(
+      `/token?identity=${identity}&roomName=${roomName}`
+    );
 
     // Extract the AccessToken from the Response.
-    const data = response.text();
+    const data = await response.text();
+    console.log('LIZA data:', data);
     const resObj = JSON.parse(data);
-    
-    const token = resObj.token,
+
+    const token = resObj.token;
     const roomURL = resObj.roomURL;
 
     // Add the specified audio device ID to ConnectOptions.
@@ -139,11 +138,17 @@ async function selectCamera() {
 async function selectMicrophone() {
   if (deviceIds.audio === null) {
     try {
-      deviceIds.audio = await selectMedia('audio', $selectMicModal, audioTrack => {
-        const $levelIndicator = $('svg rect', $selectMicModal);
-        const maxLevel = Number($levelIndicator.attr('height'));
-        micLevel(audioTrack, maxLevel, level => $levelIndicator.attr('y', maxLevel - level));
-      });
+      deviceIds.audio = await selectMedia(
+        'audio',
+        $selectMicModal,
+        (audioTrack) => {
+          const $levelIndicator = $('svg rect', $selectMicModal);
+          const maxLevel = Number($levelIndicator.attr('height'));
+          micLevel(audioTrack, maxLevel, (level) =>
+            $levelIndicator.attr('y', maxLevel - level)
+          );
+        }
+      );
     } catch (error) {
       showError($showErrorModal, error);
       return;
@@ -154,6 +159,11 @@ async function selectMicrophone() {
 
 // If the current browser is not supported by twilio-video.js, show an error
 // message. Otherwise, start the application.
-window.addEventListener('load', isSupported ? selectMicrophone : () => {
-  showError($showErrorModal, new Error('This browser is not supported.'));
-});
+window.addEventListener(
+  'load',
+  isSupported
+    ? selectMicrophone
+    : () => {
+        showError($showErrorModal, new Error('This browser is not supported.'));
+      }
+);

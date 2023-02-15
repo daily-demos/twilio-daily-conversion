@@ -7,15 +7,16 @@
  * process.env.TWILIO_API_KEY
  * process.env.TWILIO_API_SECRET
  */
-require("dotenv").load();
+ require("dotenv").load();
 
-const express = require("express");
-const http = require("http");
-const path = require("path");
-
+ const express = require("express");
+ const http = require("http");
+ const path = require("path");
+const axios = require('axios');
 
 // Max. period that a Participant is allowed to be in a Room (currently 14400 seconds or 4 hours)
-const MAX_ALLOWED_SESSION_DURATION = 14400;
+const MAX_ALLOWED_SESSION_DURATION = 300;
+const dailyAPIURL = `https://api.daily.co/v1`;
 
 // Create Express webapp.
 const app = express();
@@ -61,22 +62,24 @@ app.get("/", (request, response) => {
  * username for the client requesting a token, and takes a device ID as a query
  * parameter.
  */
-app.get('/token', function (request, response) {
-  console.log('getting daily token:', request)
+app.get('/token', async function (request, response) {
   const query = request.query;
   const userName = query.identity;
   const roomName = query.roomName;
 
-  const roomData = await createRoom(roomName);
+  let roomData = await getRoom(roomName);
+  if (!roomData) {
+    roomData = await createRoom(roomName);
+  }
   // Create an access token which we will sign and return to the client,
   // containing the grant we just created.
   const token = await getMeetingToken(roomName, userName);
-  console.log('Daily token: ', token)
+  console.log('Daily token: ', token);
   const res = {
     token: token,
     roomURL: roomData.url,
-  }
-  response.send(json.stringify(res));
+  };
+  response.send(JSON.stringify(res));
 });
 
 // Create http server and run it.
@@ -86,19 +89,19 @@ server.listen(port, function () {
   console.log('Express server running on *:' + port);
 });
 
-const dailyAPIURL = `https://api.${dailyAPIDomain}/v1`;
+async function getRoom(roomName) {
+  return false;
+}
 
 async function createRoom(roomName) {
   const apiKey = process.env.DAILY_API_KEY;
-
+  console.log('API key:', apiKey, process.env);
   // Prepare our desired room properties. Participants will start with
   // mics and cams off, and the room will expire in 24 hours.
   const req = {
+    name: roomName,
     properties: {
-      exp: Math.floor(Date.now() / 1000) + 86400,
-      start_audio_off: true,
-      start_video_off: true,
-      name: roomName,
+      exp: Math.floor(Date.now() / 1000) + MAX_ALLOWED_SESSION_DURATION,
     },
   };
 
@@ -113,10 +116,14 @@ async function createRoom(roomName) {
 
   const roomErrMsg = 'failed to create room';
 
-  const res = await axios.post(url, data, { headers }).catch((error) => {
-    console.error(roomErrMsg, res);
-    throw new Error(`${roomErrMsg}: ${error})`);
-  });
+  const res = await axios
+    .post(url, data, {
+      headers: headers,
+    })
+    .catch((error) => {
+      console.error(roomErrMsg, error);
+      throw new Error(`${roomErrMsg}: ${error})`);
+    });
 
   if (res.status !== 200 || !res.data) {
     console.error('unexpected room creation response:', res);
