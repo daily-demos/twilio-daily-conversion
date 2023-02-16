@@ -17,27 +17,27 @@ const $joinRoomModal = $('#join-room', $modals);
 
 // ConnectOptions settings for a video web application.
 const connectOptions = {
+  // https://docs.daily.co/reference/daily-js/instance-methods/update-receive-settings#main
   receiveSettings: {
-    // Use Daily's resonable defaults
     base: { video: { layer: 'inherit' } }
   },
 
   // Capture 720p video @ 24 fps.
+  // https://docs.daily.co/reference/daily-js/instance-methods/set-bandwidth#main
   userMediaVideoConstraints: { height: 720, frameRate: 24, width: 1280 },
 
-  // Override simulcast layers to match Twilio's defaults
+  // Override simulcast layers to simulate Twilio's defaults
   // for the given send resolution
+  // https://docs.daily.co/guides/scaling-calls/best-practices-to-scale-large-experiences#use-camsimulcastencodings-to-specify-spatial-layer-settings
   camSimulcastEncodings: [
     { scaleResolutionDownBy: 4, maxBitrate: 80000},
-    { scaleResolutionDownBy: 2, maxBitrate: 200000},
+    { scaleResolutionDownBy: 2, maxBitrate: 250000},
     { maxBitrate: 680000 },
   ],
 };
 
 // For mobile browsers, limit the maximum incoming video bitrate to 2.5 Mbps.
 if (isMobile) {
-  connectOptions.receiveSettings.base.video.layer = '1';
-
   // If on mobile, define custom simulcast layers to match prior behavior
   // Daily's defaults for mobile can be found here: 
   // https://docs.daily.co/guides/scaling-calls/best-practices-to-scale-large-experiences#daily-call-object-default-mobile-simulcast-layers-and-their-settings
@@ -45,6 +45,9 @@ if (isMobile) {
     { maxBitrate: 80000},
     { maxBitrate: 250000}
   ];
+  // Receive a maximum of layer 1 on mobile,
+  // which will mean a max of 250000kbps.
+  connectOptions.receiveSettings.base.video.layer = '1';
 };
 
 // On mobile browsers, there is the possibility of not getting any media even

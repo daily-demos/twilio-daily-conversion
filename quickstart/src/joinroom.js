@@ -11,7 +11,12 @@ const $participants = $('div#participants', $room);
 
 // The current active Participant in the Room.
 let activeParticipant = null;
-let activeSpeaker = null;
+
+// The current active speaker, even if they are not
+// set as the active participnt. This will be used
+// in case a participant is unpinned, in which case
+// we will replace the tile with the active speaker.
+let activeSpeakerId = null;
 
 // Whether the user has selected the active Participant by clicking on
 // one of the video thumbnails.
@@ -22,7 +27,6 @@ let isActiveParticipantPinned = false;
  * @param participant - the active Participant
  */
 function setActiveParticipant(participant) {
-  console.log("setActiveParticipant()", participant, activeParticipant)
   if (activeParticipant) {
     const $activeParticipant = $(`div#${activeParticipant.session_id}`, $participants);
     $activeParticipant.removeClass('active');
@@ -65,8 +69,8 @@ function setActiveParticipant(participant) {
  * Set the current active Participant in the Room.
  * @param room - the Room which contains the current active Participant
  */
-function setCurrentActiveParticipant(activeSpeaker, localParticipant) {
-  setActiveParticipant(activeSpeaker || localParticipant);
+function setCurrentActiveParticipant(activeParticipant, localParticipant) {
+  setActiveParticipant(activeParticipant || localParticipant);
 }
 
 /**
@@ -83,7 +87,6 @@ function setupParticipantContainer(participant, callObject) {
 
   const userName = participant.user_name;
   const identity = userName ? userName : sid;
-  console.log("participant:", participant)
   // Add a container for the Participant's media.
   const $container =
     $(`<div class="participant" data-identity="${identity}" id="${sid}">
@@ -95,19 +98,27 @@ function setupParticipantContainer(participant, callObject) {
 
   // Toggle the pinning of the active Participant's video.
   $container.on('click', () => {
-    if (activeParticipant === participant && isActiveParticipantPinned) {
+    const allParticipants = callObject.participants();
+    if (activeParticipant.session_id === sid && isActiveParticipantPinned) {
       // Unpin the RemoteParticipant and update the current active Participant.
-      setVideoPriority(participant, null, callObject);
+      setVideoPriority(sid, null, callObject);
       isActiveParticipantPinned = false;
-      setCurrentActiveParticipant(activeSpeaker);
+      const activeSpeaker = allParticipants[activeSpeakerId];
+      setCurrentActiveParticipant(activeSpeaker, allParticipants.local);
     } else {
       // Pin the RemoteParticipant as the active Participant.
       if (isActiveParticipantPinned) {
-        setVideoPriority(activeParticipant, null, callObject);
+        setVideoPriority(activeParticipant.session_id, null, callObject);
       }
-      setVideoPriority(participant, 'high', callObject);
+      let p;
+      if (participant.local) {
+        p = allParticipants.local;
+      } else {
+        p = allParticipants[sid];
+      }
+      setVideoPriority(sid, 'high', callObject);
       isActiveParticipantPinned = true;
-      setActiveParticipant(participant);
+      setActiveParticipant(p);
     }
   });
 
@@ -121,16 +132,15 @@ function setupParticipantContainer(participant, callObject) {
  * @param participant - the RemoteParticipant whose VideoTrack priority is to be set
  * @param priority - null | 'low' | 'standard' | 'high'
  */
-function setVideoPriority(participant, priority, callObject) {
-  const sessionID = participant.session_id;
-  let receiveSettings = {}; 
-
+function setVideoPriority(sessionId, priority, callObject) {
   const layer = priority === 'high' ? 3 : 'inherit'
-  if (priority === 'high') {
-    receiveSettings[sessionID].video = {layer};
-  } else {
-    receiveSettings[sessionID].video = {layer};
-  }
+  const receiveSettings = {
+    [sessionId]: {
+      video: {
+        layer
+      },
+    },
+  };
   callObject.updateReceiveSettings(receiveSettings)
 }
 
@@ -155,7 +165,7 @@ function attachTrack(track, participant, callObject) {
 
   // If the attached Track is a VideoTrack that is published by the active
   // Participant, then attach it to the main video as well.
-  if (track.kind === 'video' && participant === activeParticipant) {
+  if (track.kind === 'video' && participant.session_id === activeParticipant?.session_id) {
     updateTrackIfNeeded($activeVideo.get(0), track);
     $activeVideo.css('opacity', '');
   }
@@ -220,9 +230,9 @@ function participantConnected(participant, callObject) {
  * @param participant - the disconnected Participant
  * @param room - the Room that the Participant disconnected from
  */
-function participantDisconnected(sessionID) {
+function participantDisconnected(sessionId) {
   // Remove the Participant's media container.
-  $(`div#${sessionID}`, $participants).remove();
+  $(`div#${sessionId}`, $participants).remove();
 }
 
 function removeAllParticipants() {
@@ -239,7 +249,6 @@ async function joinRoom(token, connectOptions) {
   const logger = Logger.getLogger('daily-video');
   logger.setLevel('debug');
 
-  console.log("connect options: ", connectOptions);
   // Join to the Room with the given AccessToken and ConnectOptions.
   const callObject = DailyIframe.createCallObject({
     url: connectOptions.roomURL,
@@ -258,10 +267,16 @@ async function joinRoom(token, connectOptions) {
   callObject
     .on('joined-meeting', (ev) => {
       const p = ev.participants.local;
+
+      // Show local participant as active speaker
+      // by default.
+      if (!activeSpeakerId) {
+        activeSpeakerId = p.session_id;
+      }
       participantConnected(p, callObject);
 
       // Set the current active Participant.
-      setCurrentActiveParticipant(p, p);
+      setCurrentActiveParticipant(p);
     })
     .on('participant-joined', (ev) => {
       const p = ev.participant;
@@ -272,21 +287,29 @@ async function joinRoom(token, connectOptions) {
       participantDisconnected(p.session_id);
     })
     .on('active-speaker-change', (ev) => {
-      const sessionID = ev.activeSpeaker.peerId;
-      const p = callObject.participants()[sessionID];
-      activeSpeaker = p;
-      const lp = callObject.participants().local;
+      // Retrieve ID of the current speaker
+      const sessionId = ev.activeSpeaker.peerId;
+
+      // Update the active speaker global
+      activeSpeakerId = sessionId;
+
+      // If active speaker is not pinned, update
+      // the active speaker tile.
       if (!isActiveParticipantPinned) {
-        setCurrentActiveParticipant(p, lp);
+        // Get all participants in the call
+        const participants = callObject.participants();
+
+        const p = participants[sessionId];
+        const localParticipant = participants.local;
+        setCurrentActiveParticipant(p, localParticipant);
       }
     })
     .on('track-started', (ev) => {
       const p = ev.participant;
       const track = ev.track;
-      attachTrack(track, p);
+      attachTrack(track, p, callObject);
     })
     .on('track-stopped', (ev) => {
-      console.log("track-stopped:", ev);
       const p = ev.participant;
 
       // If the participant does not exist,
@@ -298,8 +321,14 @@ async function joinRoom(token, connectOptions) {
       detachTrack(track, p);
     })
     .on('receive-settings-updated', (ev) => {
-      console.log("Receive settings updated:", ev);
-    });
+      console.debug('Receive settings updated:', ev);
+    })
+    .on('error', (ev) => {
+      console.error('Fatal error:', ev);
+    })
+    .on('nonfatal-error', (ev) => {
+      console.error('nonfatal-error', ev);
+    })
 
   // Make the Room available in the JavaScript console for debugging.
   window.room = room;
