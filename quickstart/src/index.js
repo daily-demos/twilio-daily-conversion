@@ -17,40 +17,35 @@ const $joinRoomModal = $('#join-room', $modals);
 
 // ConnectOptions settings for a video web application.
 const connectOptions = {
-  // Available only in Small Group or Group Rooms only. Please set "Room Type"
-  // to "Group" or "Small Group" in your Twilio Console:
-  // https://www.twilio.com/console/video/configure
-  bandwidthProfile: {
-    video: {
-      dominantSpeakerPriority: 'high',
-      mode: 'collaboration',
-      clientTrackSwitchOffControl: 'auto',
-      contentPreferencesMode: 'auto',
-    },
+  receiveSettings: {
+    // Use Daily's resonable defaults
+    base: { video: { layer: 'inherit' } }
   },
 
-  // Available only in Small Group or Group Rooms only. Please set "Room Type"
-  // to "Group" or "Small Group" in your Twilio Console:
-  // https://www.twilio.com/console/video/configure
-  dominantSpeaker: true,
-
-  // Comment this line if you are playing music.
-  maxAudioBitrate: 16000,
-
-  // VP8 simulcast enables the media server in a Small Group or Group Room
-  // to adapt your encoded video quality for each RemoteParticipant based on
-  // their individual bandwidth constraints. This has no utility if you are
-  // using Peer-to-Peer Rooms, so you can comment this line.
-  preferredVideoCodecs: [{ codec: 'VP8', simulcast: true }],
-
   // Capture 720p video @ 24 fps.
-  video: { height: 720, frameRate: 24, width: 1280 },
+  userMediaVideoConstraints: { height: 720, frameRate: 24, width: 1280 },
+
+  // Override simulcast layers to match Twilio's defaults
+  // for the given send resolution
+  camSimulcastEncodings: [
+    { scaleResolutionDownBy: 4, maxBitrate: 80000},
+    { scaleResolutionDownBy: 2, maxBitrate: 200000},
+    { maxBitrate: 680000 },
+  ],
 };
 
 // For mobile browsers, limit the maximum incoming video bitrate to 2.5 Mbps.
 if (isMobile) {
-  connectOptions.bandwidthProfile.video.maxSubscriptionBitrate = 2500000;
-}
+  connectOptions.receiveSettings.base.video.layer = '1';
+
+  // If on mobile, define custom simulcast layers to match prior behavior
+  // Daily's defaults for mobile can be found here: 
+  // https://docs.daily.co/guides/scaling-calls/best-practices-to-scale-large-experiences#daily-call-object-default-mobile-simulcast-layers-and-their-settings
+  connectOptions.camSimulcastEncodings = [
+    { maxBitrate: 80000},
+    { maxBitrate: 250000}
+  ];
+};
 
 // On mobile browsers, there is the possibility of not getting any media even
 // after the user has given permission, most likely due to some other app reserving
@@ -91,13 +86,10 @@ async function selectAndJoinRoom(error = null) {
     const roomURL = resObj.roomURL;
 
     // Add the specified audio device ID to ConnectOptions.
-    connectOptions.audio = { deviceId: { exact: deviceIds.audio } };
-
-    // Add the specified Room name to ConnectOptions.
-    connectOptions.name = roomName;
+    connectOptions.audioDeviceId = deviceIds.audio;
 
     // Add the specified video device ID to ConnectOptions.
-    connectOptions.video.deviceId = { exact: deviceIds.video };
+    connectOptions.videoDeviceId = deviceIds.video;
 
     // Join the Room.
     await joinRoom(roomURL, token, connectOptions);

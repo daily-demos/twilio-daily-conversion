@@ -129,6 +129,8 @@ async function createRoom(roomName) {
     name: roomName,
     properties: {
       exp: Math.floor(Date.now() / 1000) + MAX_ALLOWED_SESSION_DURATION,
+      // Start right away in SFU mode
+      sfu_switchover: 0.5,
     },
   };
 
