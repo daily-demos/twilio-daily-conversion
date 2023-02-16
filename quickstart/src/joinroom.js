@@ -32,7 +32,7 @@ function setActiveParticipant(participant) {
     // Detach any existing VideoTrack of the active Participant.
     if (videoTrack) {
       const activeVideo = $activeVideo.get(0);
-      const src = activeVideo.srcObject?.removeTrack(videoTrack);
+      activeVideo.srcObject?.removeTrack(videoTrack);
       $activeVideo.css('opacity', '0');
     }
   }
@@ -122,7 +122,7 @@ function setupParticipantContainer(participant, callObject) {
  * @param priority - null | 'low' | 'standard' | 'high'
  */
 function setVideoPriority(participant, priority, callObject) {
-  const sessionID = participant.sessionID;
+  const sessionID = participant.session_id;
   let receiveSettings = {}; 
 
   const layer = priority === 'high' ? 3 : 'inherit'
@@ -220,9 +220,13 @@ function participantConnected(participant, callObject) {
  * @param participant - the disconnected Participant
  * @param room - the Room that the Participant disconnected from
  */
-function participantDisconnected(participant) {
+function participantDisconnected(sessionID) {
   // Remove the Participant's media container.
-  $(`div#${participant.session_id}`, $participants).remove();
+  $(`div#${sessionID}`, $participants).remove();
+}
+
+function removeAllParticipants() {
+  $participants.empty();
 }
 
 /**
@@ -230,7 +234,7 @@ function participantDisconnected(participant) {
  * @param token - the AccessToken used to join a Room
  * @param connectOptions - the ConnectOptions used to join a Room
  */
-async function joinRoom(roomURL, token, connectOptions) {
+async function joinRoom(token, connectOptions) {
   // Comment the next two lines to disable verbose logging.
   const logger = Logger.getLogger('daily-video');
   logger.setLevel('debug');
@@ -264,12 +268,10 @@ async function joinRoom(roomURL, token, connectOptions) {
       participantConnected(p, callObject);
     })
     .on('participant-left', (ev) => {
-      console.log("participant left:", ev)
       const p = ev.participant;
-      participantDisconnected(p);
+      participantDisconnected(p.session_id);
     })
     .on('active-speaker-change', (ev) => {
-      console.log("active speaker changed.", ev);
       const sessionID = ev.activeSpeaker.peerId;
       const p = callObject.participants()[sessionID];
       activeSpeaker = p;
@@ -346,16 +348,7 @@ async function joinRoom(roomURL, token, connectOptions) {
         document.onvisibilitychange = null;
       }
 
-      // Handle the disconnected LocalParticipant.
-      const participants = callObject.participants();
-
-      const p = participants.local;
-      participantDisconnected(p, callObject);
-
-      // Handle the disconnected RemoteParticipants.
-      participants.forEach((participant) => {
-        participantDisconnected(participant, room);
-      });
+      removeAllParticipants();
 
       // Clear the active Participant's video.
       $activeVideo.get(0).srcObject = null;
@@ -363,15 +356,7 @@ async function joinRoom(roomURL, token, connectOptions) {
       // Clear the Room reference used for debugging from the JavaScript console.
       window.room = null;
 
-      if (error) {
-        // Reject the Promise with the TwilioError so that the Room selection
-        // modal (plus the TwilioError message) can be displayed.
-        reject(error);
-      } else {
-        // Resolve the Promise so that the Room selection modal can be
-        // displayed.
-        resolve();
-      }
+      resolve();
     });
   });
 }
