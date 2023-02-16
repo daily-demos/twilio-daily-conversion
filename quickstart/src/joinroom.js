@@ -1,7 +1,7 @@
 'use strict';
 
 const DailyIframe = require('@daily-co/daily-js');
-const { connect, createLocalVideoTrack, Logger } = require('twilio-video');
+const { Logger } = require('twilio-video');
 const { isMobile } = require('./browser');
 const $leave = $('#leave-room');
 const $room = $('#room');
@@ -171,25 +171,28 @@ function attachTrack(track, participant, callObject) {
   }
 }
 
+// updateTrackIfNeeded() takes an existing video element
+// and a new MediaStreamTrack. If the video element contains
+// an existing track, it is removed. The new track is attached.
 function updateTrackIfNeeded(videoElement, newTrack) {
   const src = videoElement.srcObject;
   if (!src) {
     videoElement.srcObject = new MediaStream([newTrack]);
-  } else {
-    const existingTracks = src.getTracks();
-    const l = existingTracks.length;
-    switch (l) {
-      case 0:
-        break;
-      case 1:
-        src.removeTrack(existingTracks[0]);
-        break;
-      default:
-        console.warn(`Unexpected count of tracks. Expected 1, got ${l}`);
-        break;
-    }
-    src.addTrack(newTrack);
+  } 
+  const existingTracks = src.getTracks();
+  const l = existingTracks.length;
+  switch (l) {
+    case 0:
+      break;
+    case 1:
+      src.removeTrack(existingTracks[0]);
+      break;
+    default:
+      console.warn(`Unexpected count of tracks. Expected 1, got ${l}; only removing the first`);
+      src.removeTrack(existingTracks[0]);
+      break;
   }
+  src.addTrack(newTrack);
 }
 
 /**
