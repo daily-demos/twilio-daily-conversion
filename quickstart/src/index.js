@@ -54,7 +54,7 @@ if (isMobile) {
 // https://www.twilio.com/docs/video/build-js-video-application-recommendations-and-best-practices
 const deviceIds = {
   audio: isMobile ? null : localStorage.getItem('audioDeviceId'),
-  video: isMobile ? null : localStorage.getItem('videoDeviceId'),
+  video: isMobile ? null : localStorage.getItem('videoDeviceId')
 };
 
 /**
@@ -84,7 +84,7 @@ async function selectAndJoinRoom(error = null) {
 
     const token = resObj.token;
     const roomURL = resObj.roomURL;
-
+    connectOptions.roomURL = roomURL;
     // Add the specified audio device ID to ConnectOptions.
     connectOptions.audioDeviceId = deviceIds.audio;
 
@@ -92,7 +92,7 @@ async function selectAndJoinRoom(error = null) {
     connectOptions.videoDeviceId = deviceIds.video;
 
     // Join the Room.
-    await joinRoom(roomURL, token, connectOptions);
+    await joinRoom(token, connectOptions);
 
     // After the video session, display the room selection modal.
     return selectAndJoinRoom();
@@ -107,14 +107,10 @@ async function selectAndJoinRoom(error = null) {
 async function selectCamera() {
   if (deviceIds.video === null) {
     try {
-      deviceIds.video = await selectMedia(
-        'video',
-        $selectCameraModal,
-        (videoTrack) => {
-          const $video = $('video', $selectCameraModal);
-          videoTrack.attach($video.get(0));
-        }
-      );
+      deviceIds.video = await selectMedia('video', $selectCameraModal, videoTrack => {
+        const $video = $('video', $selectCameraModal);
+        videoTrack.attach($video.get(0))
+      });
     } catch (error) {
       showError($showErrorModal, error);
       return;
@@ -129,17 +125,11 @@ async function selectCamera() {
 async function selectMicrophone() {
   if (deviceIds.audio === null) {
     try {
-      deviceIds.audio = await selectMedia(
-        'audio',
-        $selectMicModal,
-        (audioTrack) => {
-          const $levelIndicator = $('svg rect', $selectMicModal);
-          const maxLevel = Number($levelIndicator.attr('height'));
-          micLevel(audioTrack, maxLevel, (level) =>
-            $levelIndicator.attr('y', maxLevel - level)
-          );
-        }
-      );
+      deviceIds.audio = await selectMedia('audio', $selectMicModal, audioTrack => {
+        const $levelIndicator = $('svg rect', $selectMicModal);
+        const maxLevel = Number($levelIndicator.attr('height'));
+        micLevel(audioTrack, maxLevel, level => $levelIndicator.attr('y', maxLevel - level));
+      });
     } catch (error) {
       showError($showErrorModal, error);
       return;
@@ -150,11 +140,6 @@ async function selectMicrophone() {
 
 // If the current browser is not supported by twilio-video.js, show an error
 // message. Otherwise, start the application.
-window.addEventListener(
-  'load',
-  isSupported
-    ? selectMicrophone
-    : () => {
-        showError($showErrorModal, new Error('This browser is not supported.'));
-      }
-);
+window.addEventListener('load', isSupported ? selectMicrophone : () => {
+  showError($showErrorModal, new Error('This browser is not supported.'));
+});

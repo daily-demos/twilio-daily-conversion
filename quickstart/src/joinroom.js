@@ -238,7 +238,7 @@ async function joinRoom(roomURL, token, connectOptions) {
   console.log("connect options: ", connectOptions);
   // Join to the Room with the given AccessToken and ConnectOptions.
   const callObject = DailyIframe.createCallObject({
-    url: roomURL,
+    url: connectOptions.roomURL,
     token: token,
     dailyConfig: {
       userMediaVideoConstraints: connectOptions.userMediaVideoConstraints,
