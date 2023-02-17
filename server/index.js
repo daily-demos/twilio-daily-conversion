@@ -36,8 +36,8 @@ const app = express();
   'remotereconnection',
   'datatracks',
   'manualrenderhint',
-  'autorenderhint',
-].forEach((example) => {
+  'autorenderhint'
+].forEach(example => {
   const examplePath = path.join(__dirname, `../examples/${example}/public`);
   app.use(`/${example}`, express.static(examplePath));
 });
@@ -84,7 +84,7 @@ app.get('/token', async function (request, response) {
 // Create http server and run it.
 const server = http.createServer(app);
 const port = process.env.PORT || 3000;
-server.listen(port, function () {
+server.listen(port, function() {
   console.log('Express server running on *:' + port);
 });
 
