@@ -7,7 +7,7 @@
  * process.env.TWILIO_API_KEY
  * process.env.TWILIO_API_SECRET
  */
- require('dotenv').load();
+require('dotenv').load();
 
 const express = require('express');
 const http = require('http');
