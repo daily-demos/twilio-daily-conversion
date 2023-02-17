@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /**
  * Load Twilio configuration from .env config file - the following environment
@@ -7,15 +7,15 @@
  * process.env.TWILIO_API_KEY
  * process.env.TWILIO_API_SECRET
  */
- require("dotenv").load();
+ require('dotenv').load();
 
- const express = require("express");
- const http = require("http");
- const path = require("path");
+const express = require('express');
+const http = require('http');
+const path = require('path');
 const axios = require('axios');
 
 // Max. period that a Participant is allowed to be in a Room (currently 14400 seconds or 4 hours)
-const MAX_ALLOWED_SESSION_DURATION = 300;
+const MAX_ALLOWED_SESSION_DURATION = 14400;
 const dailyAPIURL = `https://api.daily.co/v1`;
 
 // Create Express webapp.
@@ -23,38 +23,38 @@ const app = express();
 
 // Set up the paths for the examples.
 [
-  "bandwidthconstraints",
-  "codecpreferences",
-  "dominantspeaker",
-  "localvideofilter",
-  "localvideosnapshot",
-  "mediadevices",
-  "networkquality",
-  "reconnection",
-  "screenshare",
-  "localmediacontrols",
-  "remotereconnection",
-  "datatracks",
-  "manualrenderhint",
-  "autorenderhint",
+  'bandwidthconstraints',
+  'codecpreferences',
+  'dominantspeaker',
+  'localvideofilter',
+  'localvideosnapshot',
+  'mediadevices',
+  'networkquality',
+  'reconnection',
+  'screenshare',
+  'localmediacontrols',
+  'remotereconnection',
+  'datatracks',
+  'manualrenderhint',
+  'autorenderhint',
 ].forEach((example) => {
   const examplePath = path.join(__dirname, `../examples/${example}/public`);
   app.use(`/${example}`, express.static(examplePath));
 });
 
 // Set up the path for the quickstart.
-const quickstartPath = path.join(__dirname, "../quickstart/public");
-app.use("/quickstart", express.static(quickstartPath));
+const quickstartPath = path.join(__dirname, '../quickstart/public');
+app.use('/quickstart', express.static(quickstartPath));
 
 // Set up the path for the examples page.
-const examplesPath = path.join(__dirname, "../examples");
-app.use("/examples", express.static(examplesPath));
+const examplesPath = path.join(__dirname, '../examples');
+app.use('/examples', express.static(examplesPath));
 
 /**
  * Default to the Quick Start application.
  */
-app.get("/", (request, response) => {
-  response.redirect("/quickstart");
+app.get('/', (request, response) => {
+  response.redirect('/quickstart');
 });
 
 /**
@@ -88,6 +88,7 @@ server.listen(port, function () {
   console.log('Express server running on *:' + port);
 });
 
+// getRoom() retrieves a room by name, if one exists.
 async function getRoom(roomName) {
   const apiKey = process.env.DAILY_API_KEY;
   // Prepare our headers, containing our Daily API key
@@ -112,21 +113,19 @@ async function getRoom(roomName) {
   }
 
   if (res.status !== 200 || !res.data) {
-    console.error('unexpected room creation response:', res);
+    console.error('unexpected room retrieval response:', res);
     throw new Error(errMsg);
   }
-  // Cast Daily's response to our room data interface.
-  const roomData = res.data;
-  
-  return roomData;
+
+  return res.data;
 }
 
 async function createRoom(roomName) {
   const apiKey = process.env.DAILY_API_KEY;
-  // Prepare our desired room properties. Participants will start with
-  // mics and cams off, and the room will expire in 24 hours.
+  // Prepare our desired room properties. 
   const req = {
     name: roomName,
+    privacy: 'private',
     properties: {
       exp: Math.floor(Date.now() / 1000) + MAX_ALLOWED_SESSION_DURATION,
       // Start right away in SFU mode
@@ -158,9 +157,7 @@ async function createRoom(roomName) {
     console.error('unexpected room creation response:', res);
     throw new Error(roomErrMsg);
   }
-  // Cast Daily's response to our room data interface.
   const roomData = res.data;
-
   return roomData;
 }
 
