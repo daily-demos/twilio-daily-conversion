@@ -54,9 +54,9 @@ function setActiveParticipant(participant) {
   }
 
   // Attach the new active Participant's video.
-  const videoTrack = participant.tracks.video.persistentTrack;
-  if (videoTrack) {
-    updateTrackIfNeeded($activeVideo.get(0), videoTrack);
+  const track = participant.tracks.video.persistentTrack;
+  if (track) {
+    updateTrackIfNeeded($activeVideo.get(0), track);
     $activeVideo.css('opacity', '');
   }
 
@@ -177,6 +177,7 @@ function updateTrackIfNeeded(videoElement, newTrack) {
   const src = videoElement.srcObject;
   if (!src) {
     videoElement.srcObject = new MediaStream([newTrack]);
+    return;
   } 
   const existingTracks = src.getTracks();
   const l = existingTracks.length;
@@ -204,14 +205,14 @@ function detachTrack(track, participant) {
   const $media = $(`div#${participant.session_id} > ${track.kind}`, $participants);
   const mediaEl = $media.get(0);
   $media.css('opacity', '0');
-  mediaEl.tracks.remove(track);
+  mediaEl.srcObject.removeTrack(track);
   mediaEl.srcObject = null;
 
   // If the detached Track is a VideoTrack that is published by the active
   // Participant, then detach it from the main video as well.
-  if (track.kind === 'video' && participant === activeParticipant) {
+  if (track.kind === 'video' && participant.session_id === activeParticipant.session_id) {
     const activeVideoEl = $activeVideo.get(0);
-    track.detach(activeVideoEl);
+    activeVideoEl.srcObject.removeTrack(track);
     activeVideoEl.srcObject = null;
     $activeVideo.css('opacity', '0');
   }
@@ -318,9 +319,6 @@ async function joinRoom(token, connectOptions) {
       const track = ev.track;
       detachTrack(track, p);
     })
-    .on('receive-settings-updated', (ev) => {
-      console.debug('Receive settings updated:', ev);
-    })
     .on('error', (ev) => {
       console.error('Fatal error:', ev);
     })
@@ -329,7 +327,7 @@ async function joinRoom(token, connectOptions) {
     })
 
   // Make the Room available in the JavaScript console for debugging.
-  window.room = room;
+  window.callObject = callObject;
 
   // Leave the Room when the "Leave Room" button is clicked.
   $leave.click(function onLeave() {
@@ -339,7 +337,7 @@ async function joinRoom(token, connectOptions) {
 
   callObject.join();
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     // Leave the Room when the "beforeunload" event is fired.
     window.onbeforeunload = () => {
       callObject.leave();
@@ -367,7 +365,7 @@ async function joinRoom(token, connectOptions) {
       };
     }
 
-    callObject.on('left-meeting', (ev) => {
+    callObject.on('left-meeting', () => {
       // Clear the event handlers on document and window..
       window.onbeforeunload = null;
       if (isMobile) {
@@ -381,7 +379,8 @@ async function joinRoom(token, connectOptions) {
       $activeVideo.get(0).srcObject = null;
 
       // Clear the Room reference used for debugging from the JavaScript console.
-      window.room = null;
+      callObject.destroy();
+      window.callObject = null;
 
       resolve();
     });
