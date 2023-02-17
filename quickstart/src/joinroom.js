@@ -347,7 +347,7 @@ async function joinRoom(token, connectOptions) {
       // TODO(mmalavalli): investigate why "pagehide" is not working in iOS Safari.
       // In iOS Safari, "beforeunload" is not fired, so use "pagehide" instead.
       window.onpagehide = () => {
-        callObject.disconnect();
+        callObject.leave();
       };
 
       // On mobile browsers, use "visibilitychange" event to determine when
