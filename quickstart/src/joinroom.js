@@ -1,7 +1,6 @@
 'use strict';
 
 const DailyIframe = require('@daily-co/daily-js');
-const { Logger } = require('twilio-video');
 const { isMobile } = require('./browser');
 const $leave = $('#leave-room');
 const $room = $('#room');
@@ -248,10 +247,6 @@ function removeAllParticipants() {
  * @param connectOptions - the ConnectOptions used to join a Room
  */
 async function joinRoom(token, connectOptions) {
-  // Comment the next two lines to disable verbose logging.
-  const logger = Logger.getLogger('daily-video');
-  logger.setLevel('debug');
-
   // Join to the Room with the given AccessToken and ConnectOptions.
   const callObject = DailyIframe.createCallObject({
     url: connectOptions.roomURL,
