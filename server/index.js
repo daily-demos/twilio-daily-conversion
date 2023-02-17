@@ -157,8 +157,7 @@ async function createRoom(roomName) {
     console.error('unexpected room creation response:', res);
     throw new Error(roomErrMsg);
   }
-  const roomData = res.data;
-  return roomData;
+  return res.data;
 }
 
 
