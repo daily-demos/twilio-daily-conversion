@@ -4,6 +4,8 @@
 
 This application demonstrates a migration of Twilio's Quickstart JavaScript video demo to [`daily-js`](https://docs.daily.co/reference/daily-js), Daily's Client SDK for JavaScript.
 
+This demo is a basic migration implementation and is not optimized for large calls. Daily supports large real-time calls of 1,000 active participants. If you're building for higher participant counts, we recommend checking out our [best practices for scaling large calls](https://docs.daily.co/guides/scaling-calls/best-practices-to-scale-large-experiences)
+
 ![screenshot of chat app](quickstart/public/quickstart.png)
 
 ## Setup Requirements

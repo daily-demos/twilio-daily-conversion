@@ -132,7 +132,14 @@ function setupParticipantContainer(participant, callObject) {
  * @param priority - null | 'low' | 'standard' | 'high'
  */
 function setVideoPriority(sessionId, priority, callObject) {
-  const layer = priority === 'high' ? 3 : 'inherit'
+  let layer = 'inherit';
+  if (priority === 'high') {
+    if (isMobile) {
+      layer = 1;
+    } else {
+      layer = 2;
+    }
+  }
   const receiveSettings = {
     [sessionId]: {
       video: {
@@ -254,10 +261,7 @@ async function joinRoom(token, connectOptions) {
     token: token,
     dailyConfig: {
       userMediaVideoConstraints: connectOptions.userMediaVideoConstraints,
-      receiveSettings: {
-        base: { video: { layer: 0 } }, // default: { layer: 2 }
-      },
-      camSimulcastEncodings: connectOptions.camSimulcastEncodings,
+      receiveSettings: connectOptions.receiveSettings,
     },
     audioSource: connectOptions.audioDeviceId,
     videoSource: connectOptions.videoDeviceId,
