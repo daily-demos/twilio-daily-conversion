@@ -25,7 +25,7 @@ let isActiveParticipantPinned = false;
  * Set the active Participant's video.
  * @param participant - the active Participant
  */
-function setActiveParticipant(participant) {
+function setActiveParticipant(participant, callObject) {
   if (activeParticipant) {
     const $activeParticipant = $(`div#${activeParticipant.session_id}`, $participants);
     $activeParticipant.removeClass('active');
@@ -38,6 +38,8 @@ function setActiveParticipant(participant) {
       activeVideo.srcObject?.removeTrack(videoTrack);
       $activeVideo.css('opacity', '0');
     }
+    // Reset priority back to default
+    setVideoPriority(activeParticipant.session_id, null, callObject);
   }
 
   // Set the new active Participant.
@@ -62,14 +64,17 @@ function setActiveParticipant(participant) {
 
   // Set the new active Participant's identity
   $activeParticipant.attr('data-identity', identity);
+  // Set new active participant's track priority to 'high'
+  setVideoPriority(activeParticipant.session_id, 'high', callObject);
 }
 
 /**
  * Set the current active Participant in the Room.
  * @param room - the Room which contains the current active Participant
  */
-function setCurrentActiveParticipant(activeParticipant, localParticipant) {
-  setActiveParticipant(activeParticipant || localParticipant);
+function setCurrentActiveParticipant(activeParticipant, callObject) {
+  const lp = callObject.participants().local;
+  setActiveParticipant(activeParticipant || lp, callObject);
 }
 
 /**
@@ -100,24 +105,19 @@ function setupParticipantContainer(participant, callObject) {
     const allParticipants = callObject.participants();
     if (activeParticipant.session_id === sid && isActiveParticipantPinned) {
       // Unpin the RemoteParticipant and update the current active Participant.
-      setVideoPriority(sid, null, callObject);
       isActiveParticipantPinned = false;
       const activeSpeaker = allParticipants[activeSpeakerId];
-      setCurrentActiveParticipant(activeSpeaker, allParticipants.local);
+      setCurrentActiveParticipant(activeSpeaker, callObject);
     } else {
       // Pin the RemoteParticipant as the active Participant.
-      if (isActiveParticipantPinned) {
-        setVideoPriority(activeParticipant.session_id, null, callObject);
-      }
       let p;
       if (participant.local) {
         p = allParticipants.local;
       } else {
         p = allParticipants[sid];
       }
-      setVideoPriority(sid, 'high', callObject);
       isActiveParticipantPinned = true;
-      setActiveParticipant(p);
+      setActiveParticipant(p, callObject);
     }
   });
 
@@ -279,7 +279,7 @@ async function joinRoom(token, connectOptions) {
       participantConnected(p, callObject);
 
       // Set the current active Participant.
-      setCurrentActiveParticipant(p);
+      setCurrentActiveParticipant(p, callObject);
     })
     .on('participant-joined', (ev) => {
       const p = ev.participant;
@@ -303,8 +303,7 @@ async function joinRoom(token, connectOptions) {
         const participants = callObject.participants();
 
         const p = participants[sessionId];
-        const localParticipant = participants.local;
-        setCurrentActiveParticipant(p, localParticipant);
+        setCurrentActiveParticipant(p, callObject);
       }
     })
     .on('track-started', (ev) => {

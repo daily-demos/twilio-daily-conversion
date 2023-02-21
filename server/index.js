@@ -58,9 +58,9 @@ app.get('/', (request, response) => {
 });
 
 /**
- * Generate an Access Token for a chat application user - it generates a random
- * username for the client requesting a token, and takes a device ID as a query
- * parameter.
+ * Generate an Access Token for a chat application user.
+ * Retrieve an existing room or create one with the given
+ * name if it does not already exist.
  */
 app.get('/token', async function (request, response) {
   const query = request.query;
@@ -71,8 +71,6 @@ app.get('/token', async function (request, response) {
   if (!roomData) {
     roomData = await createRoom(roomName);
   }
-  // Create an access token which we will sign and return to the client,
-  // containing the grant we just created.
   const token = await getMeetingToken(roomName, userName);
   const res = {
     token: token,
@@ -167,8 +165,7 @@ async function getMeetingToken(roomName, userName) {
     properties: {
       room_name: roomName,
       user_name: userName,
-      exp: Math.floor(Date.now() / 1000) + 86400,
-      is_owner: true,
+      exp: Math.floor(Date.now() / 1000) + MAX_ALLOWED_SESSION_DURATION,
     },
   };
 
