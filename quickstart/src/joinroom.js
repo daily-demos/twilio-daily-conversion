@@ -180,26 +180,26 @@ function attachTrack(track, participant, callObject) {
 // updateTrackIfNeeded() takes an existing video element
 // and a new MediaStreamTrack. If the video element contains
 // an existing track, it is removed. The new track is attached.
-function updateTrackIfNeeded(videoElement, newTrack) {
-  const src = videoElement.srcObject;
+function updateTrackIfNeeded(mediaElement, newTrack) {
+  const src = mediaElement.srcObject;
   if (!src) {
-    videoElement.srcObject = new MediaStream([newTrack]);
+    mediaElement.srcObject = new MediaStream([newTrack]);
     return;
   } 
   const existingTracks = src.getTracks();
   const l = existingTracks.length;
-  switch (l) {
-    case 0:
-      break;
-    case 1:
-      src.removeTrack(existingTracks[0]);
-      break;
-    default:
-      console.warn(`Unexpected count of tracks. Expected 1, got ${l}; only removing the first`);
-      src.removeTrack(existingTracks[0]);
-      break;
+  if (l === 0) {
+    src.addTrack(newTrack);
+    return;
   }
-  src.addTrack(newTrack);
+  if (l > 1) {
+    console.warn(`Unexpected count of tracks. Expected 1, got ${l}; only handling the first`);
+  }
+  const existingTrack = existingTracks[0];
+  if (existingTrack.id !== newTrack.id) {
+    src.removeTrack(existingTrack);
+    src.addTrack(newTrack);
+  }
 }
 
 /**
@@ -240,9 +240,16 @@ function participantConnected(participant, callObject) {
  * @param participant - the disconnected Participant
  * @param room - the Room that the Participant disconnected from
  */
-function participantDisconnected(sessionId) {
+function participantDisconnected(sessionId, callObject) {
   // Remove the Participant's media container.
   $(`div#${sessionId}`, $participants).remove();
+
+  // If this is the currently pinned participant, unpin them
+  // and set the local participant as active.
+  if (isActiveParticipantPinned && activeParticipant.session_id === sessionId) {
+    isActiveParticipantPinned = false;
+    setCurrentActiveParticipant(null, callObject);
+  }
 }
 
 function removeAllParticipants() {
@@ -287,7 +294,7 @@ async function joinRoom(token, connectOptions) {
     })
     .on('participant-left', (ev) => {
       const p = ev.participant;
-      participantDisconnected(p.session_id);
+      participantDisconnected(p.session_id, callObject);
     })
     .on('active-speaker-change', (ev) => {
       // Retrieve ID of the current speaker
