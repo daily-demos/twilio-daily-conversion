@@ -12,7 +12,7 @@ const $participants = $('div#participants', $room);
 let activeParticipant = null;
 
 // The current active speaker, even if they are not
-// set as the active participnt. This will be used
+// set as the active participant. This will be used
 // in case a participant is unpinned, in which case
 // we will replace the tile with the active speaker.
 let activeSpeakerId = null;
@@ -24,6 +24,7 @@ let isActiveParticipantPinned = false;
 /**
  * Set the active Participant's video.
  * @param participant - the active Participant
+ * @param callObject - the Daily call object instance
  */
 function setActiveParticipant(participant, callObject) {
   if (activeParticipant) {
@@ -70,7 +71,8 @@ function setActiveParticipant(participant, callObject) {
 
 /**
  * Set the current active Participant in the Room.
- * @param room - the Room which contains the current active Participant
+ * @param activeParticipant - the participant to feature in active participant view
+ * @param callObject - the Daily call object instance
  */
 function setCurrentActiveParticipant(activeParticipant, callObject) {
   const lp = callObject.participants().local;
@@ -80,7 +82,7 @@ function setCurrentActiveParticipant(activeParticipant, callObject) {
 /**
  * Set up the Participant's media container.
  * @param participant - the Participant whose media container is to be set up
- * @param room - the Room that the Participant joined
+ * @param callObject - the Daily call object
  */
 function setupParticipantContainer(participant, callObject) {
   const sid = participant.session_id;
@@ -128,8 +130,9 @@ function setupParticipantContainer(participant, callObject) {
 /**
  * Set the VideoTrack priority for the given RemoteParticipant. This has no
  * effect in Peer-to-Peer Rooms.
- * @param participant - the RemoteParticipant whose VideoTrack priority is to be set
+ * @param sessionId - the ID of the participant whose priority is being set
  * @param priority - null | 'low' | 'standard' | 'high'
+ * @param callObject - the Daily call object
  */
 function setVideoPriority(sessionId, priority, callObject) {
   let layer = 'inherit';
@@ -154,6 +157,7 @@ function setVideoPriority(sessionId, priority, callObject) {
  * Attach a Track to the DOM.
  * @param track - the Track to attach
  * @param participant - the Participant which published the Track
+ * @param callObject - the Daily call object instance
  */
 function attachTrack(track, participant, callObject) {
   // Attach the Participant's Track to the thumbnail.
@@ -228,7 +232,7 @@ function detachTrack(track, participant) {
 /**
  * Handle the Participant's media.
  * @param participant - the Participant
- * @param room - the Room that the Participant joined
+ * @param callObject - the Daily call object instance
  */
 function participantConnected(participant, callObject) {
   // Set up the Participant's media container.
@@ -237,8 +241,8 @@ function participantConnected(participant, callObject) {
 
 /**
  * Handle a disconnected Participant.
- * @param participant - the disconnected Participant
- * @param room - the Room that the Participant disconnected from
+ * @param sessionId - the ID of the disconnected participant
+ * @param callObject - the Daily call object instance
  */
 function participantDisconnected(sessionId, callObject) {
   // Remove the Participant's media container.
@@ -258,7 +262,7 @@ function removeAllParticipants() {
 
 /**
  * Join a Room.
- * @param token - the AccessToken used to join a Room
+ * @param token - the meeting token used to join a Daily room
  * @param connectOptions - the ConnectOptions used to join a Room
  */
 async function joinRoom(token, connectOptions) {
