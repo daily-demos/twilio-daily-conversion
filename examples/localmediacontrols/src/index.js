@@ -1,7 +1,7 @@
 'use strict';
 
+const DailyIframe = require('@daily-co/daily-js');
 const Prism = require('prismjs');
-const Video = require('twilio-video');
 const getSnippet = require('../../util/getsnippet');
 const getRoomCredentials = require('../../util/getroomcredentials');
 const helpers = require('./helpers');
@@ -13,7 +13,6 @@ const participantMutedOrUnmutedMedia = helpers.participantMutedOrUnmutedMedia;
 
 const audioPreview = document.getElementById('audiopreview');
 const videoPreview = document.getElementById('videopreview');
-let roomName = null;
 
 (async function(){
   // Load the code snippet.
@@ -22,21 +21,35 @@ let roomName = null;
 
   pre.innerHTML = Prism.highlight(snippet, Prism.languages.javascript);
 
+  // Get room name, if any is passed
+  const params = new URLSearchParams(window.location.search);
+  const roomName = params.get("roomName");
   // Get the credentials to connect to the Room.
-  const credsP1 = await getRoomCredentials();
-  const credsP2 = await getRoomCredentials();
+  const tokenAndRoomData = await getRoomCredentials(undefined, roomName);
 
-  // Create room instance and name for participants to join.
-  const roomP1 = await Video.connect(credsP1.token);
-
-  // Set room name for participant 2 to join.
-  roomName = roomP1.name;
-
-  // Connecting remote participants.
-  const roomP2 = await Video.connect(credsP2.token, {
-    name: roomName,
-    tracks: []
+  // Create a call object 
+  const callObject = DailyIframe.createCallObject({
+    url: tokenAndRoomData.url,
+    token: tokenAndRoomData.token,
   });
+
+  // Starts video upon P2 joining room
+  callObject
+  .on('joined-meeting', () => {
+    const inviteURL = new URL(window.location.href);
+    populateInviteURL(tokenAndRoomData.roomName);
+  })
+
+  // Configure what happens when participant mutes or unmutes
+  participantMutedOrUnmutedMedia(callObject, (track, participant) => {
+    if (participant.local) return;
+    removeTrack(track);
+  }, (track, participant) => {
+    if (participant.local) return;
+    updateTrack(track)
+  });
+
+  callObject.join();
 
   // Muting audio track and video tracks click handlers
   muteAudioBtn.onclick = () => {
@@ -45,14 +58,14 @@ let roomName = null;
     const inactiveIcon = document.getElementById('inactiveIcon');
 
     if(mute) {
-      muteYourAudio(roomP1);
+      muteYourAudio(callObject);
       muteAudioBtn.classList.add('muted');
       muteAudioBtn.innerText = 'Enable Audio';
       activeIcon.id = 'inactiveIcon';
       inactiveIcon.id = 'activeIcon';
 
     } else {
-      unmuteYourAudio(roomP1);
+      unmuteYourAudio(callObject);
       muteAudioBtn.classList.remove('muted');
       muteAudioBtn.innerText = 'Disable Audio';
       activeIcon.id = 'inactiveIcon';
@@ -64,45 +77,89 @@ let roomName = null;
     const mute = !muteVideoBtn.classList.contains('muted');
 
     if(mute) {
-      muteYourVideo(roomP1);
+      muteYourVideo(callObject);
       muteVideoBtn.classList.add('muted');
       muteVideoBtn.innerText = 'Enable Video';
     } else {
-      unmuteYourVideo(roomP1);
+      unmuteYourVideo(callObject);
       muteVideoBtn.classList.remove('muted');
       muteVideoBtn.innerText = 'Disable Video';
     }
   }
 
-  // Starts video upon P2 joining room
-  roomP2.on('trackSubscribed', track => {
-    if (track.isEnabled) {
-      if (track.kind === 'audio') {
-        audioPreview.appendChild(track.attach());
-      } else{
-        videoPreview.appendChild(track.attach());
-      }
-    }
-  });
-
-  participantMutedOrUnmutedMedia(roomP2, track => {
-    track.detach().forEach(element => {
-      element.srcObject = null;
-      element.remove();
-    });
-  }, track => {
-      if (track.kind === 'audio') {
-        audioPreview.appendChild(track.attach());
-      }
-      if (track.kind === 'video') {
-        videoPreview.appendChild(track.attach());
-      }
-  });
-
   // Disconnect from the Room
   window.onbeforeunload = () => {
-    roomP1.disconnect();
-    roomP2.disconnect();
-    roomName = null;
+    callObject.leave();
   }
 }());
+
+function populateInviteURL(roomName) {
+  const joinEle = document.getElementById('join-link');
+  const inviteURL = new URL(`${window.location.origin}${window.location.pathname}`);
+  inviteURL.searchParams.append('roomName', roomName);
+  const s = inviteURL.toString();
+  joinEle.innerHTML = `<a href="${s}">${s}</a>`
+}
+
+function removeTrack(track) {
+  const mediaEle = getMediaElement(track.kind)
+  if (!mediaEle) return;
+  mediaEle.srcObject?.removeTrack(track);
+  mediaEle.srcObject = null;
+  mediaEle.remove();
+
+}
+
+// updateTrack updates the audio or video
+// preview elements with the given track
+function updateTrack(track) {
+  const mediaEle = getOrCreateMediaElement(track.kind)
+  if (!mediaEle) return;
+
+  const src = mediaEle.srcObject;
+  const allTracks = src.getTracks();
+  const l = allTracks.length;
+  if (l === 0) {
+    src.addTrack(track);
+    return;
+  }
+  if (l > 1) {
+    console.warn(`Expected 1 track, got ${l}; only working with the first`);
+  }
+  const existingTrack = allTracks[0];
+  if (existingTrack.id === track.id) {
+    return;
+  }
+  src.removeTrack(existingTrack);
+  src.addTrack(track);
+}
+
+function getOrCreateMediaElement(trackKind) {
+  const mediaEle = getMediaElement(trackKind);
+  if (mediaEle) return mediaEle;
+  const newMediaEle = document.createElement(trackKind);
+  newMediaEle.autoplay = true;
+  newMediaEle.srcObject = new MediaStream();
+
+  const parentEle = getParentEle(trackKind);
+  parentEle.append(newMediaEle);
+  return newMediaEle;
+}
+
+function getMediaElement(trackKind) {
+  const parentEle = getParentEle(trackKind);
+  if (!parentEle) return;
+  const mediaEles = parentEle.getElementsByTagName(trackKind);
+  if (mediaEles.length === 0) return;
+  return mediaEles[0];
+}
+
+function getParentEle(trackKind) {
+  if (trackKind === 'video') {
+    return videoPreview;
+  }
+  if (trackKind === 'audio') {
+    return audioPreview;
+  }
+  return null;
+}

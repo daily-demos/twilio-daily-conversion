@@ -2,22 +2,17 @@
 
 /**
  * Mute/unmute your media in a Room.
- * @param {Room} room - The Room you have joined
+ * @param {DailyCall} callObject - The Daily call object instance
  * @param {'audio'|'video'} kind - The type of media you want to mute/unmute
  * @param {'mute'|'unmute'} action - Whether you want to mute/unmute
  */
-function muteOrUnmuteYourMedia(room, kind, action) {
-  const publications = kind === 'audio'
-    ? room.localParticipant.audioTracks
-    : room.localParticipant.videoTracks;
-
-  publications.forEach(function(publication) {
-    if (action === 'mute') {
-      publication.track.disable();
-    } else {
-      publication.track.enable();
-    }
-  });
+function muteOrUnmuteYourMedia(callObject, kind, action) {
+  const enable = action === 'mute' ? false : true;
+  if (kind === 'audio') {
+    callObject.setLocalAudio(enable);
+  } else {
+    callObject.setLocalVideo(enable);
+  }
 }
 
 /**
@@ -63,15 +58,17 @@ function unmuteYourVideo(room) {
  * @param {function} onUnmutedMedia - Called when a RemoteParticipant unmuted its media
  * @returns {void}
  */
-function participantMutedOrUnmutedMedia(room, onMutedMedia, onUnmutedMedia) {
-  room.on('trackSubscribed', function(track, publication, participant) {
-    track.on('disabled', function() {
-      return onMutedMedia(track, participant);
-    });
-    track.on('enabled', function() {
-      return onUnmutedMedia(track, participant);
-    });
+function participantMutedOrUnmutedMedia(callObject, onMutedMedia, onUnmutedMedia) {
+  callObject.on('track-started', function(ev) {
+    const track = ev.track;
+    const participant = ev.participant;
+    onUnmutedMedia(track, participant);
   });
+  callObject.on('track-stopped', function(ev) {
+    const track = ev.track;
+    const participant = ev.participant;
+    onMutedMedia(track, participant);
+  })
 }
 
 exports.muteYourAudio = muteYourAudio;
