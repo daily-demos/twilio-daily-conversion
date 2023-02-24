@@ -71,10 +71,11 @@ app.get('/token', async function (request, response) {
   if (!roomData) {
     roomData = await createRoom(roomName);
   }
-  const token = await getMeetingToken(roomName, userName);
+  const token = await getMeetingToken(roomData.name, userName);
   const res = {
     token: token,
     roomURL: roomData.url,
+    roomName: roomData.name,
   };
   response.send(JSON.stringify(res));
 });
@@ -88,6 +89,10 @@ server.listen(port, function() {
 
 // getRoom() retrieves a room by name, if one exists.
 async function getRoom(roomName) {
+  // If no room name was provided, there's no
+  // room to retrieve. Just early out.
+  if (!roomName) return null;
+
   const apiKey = process.env.DAILY_API_KEY;
   // Prepare our headers, containing our Daily API key
   const headers = {
@@ -122,14 +127,19 @@ async function createRoom(roomName) {
   const apiKey = process.env.DAILY_API_KEY;
   // Prepare our desired room properties. 
   const req = {
-    name: roomName,
     privacy: 'private',
     properties: {
       exp: Math.floor(Date.now() / 1000) + MAX_ALLOWED_SESSION_DURATION,
       // Start right away in SFU mode
       sfu_switchover: 0.5,
+      start_video_off: false,
+      start_audio_off: false,
     },
   };
+
+  if (roomName) {
+    req.name = roomName;
+  }
 
   // Prepare our headers, containing our Daily API key
   const headers = {

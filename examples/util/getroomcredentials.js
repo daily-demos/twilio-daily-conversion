@@ -38,10 +38,24 @@ function randomName() {
  * @param {string} [identity] identitiy to use, if not specified use random name.
  * @returns {Promise<{identity: string, token: string}>}
  */
-async function getRoomCredentials(identity = randomName()) {
-  const response = await fetch(`/token?identity=${identity}`);
-  const token = await response.text();
-  return { identity, token };
+async function getRoomCredentials(identity = randomName(), roomName) {
+  let url = `/token?identity=${identity}`;
+
+  // Append room name parameter if one is provided
+  if (roomName) {
+    url += `&roomName=${roomName}`
+  }
+  const response = await fetch(url);
+  const data = await response.text();
+  const resObj = JSON.parse(data);
+  const token = resObj.token;
+  const roomURL = resObj.roomURL;
+  roomName = resObj.roomName;
+  return {
+    url: roomURL,
+    token: token,
+    roomName,
+  };
 }
 
 module.exports = getRoomCredentials;
