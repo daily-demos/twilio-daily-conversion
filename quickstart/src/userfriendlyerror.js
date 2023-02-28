@@ -34,6 +34,7 @@ const USER_FRIENDLY_ERRORS = {
  */
 function getUserFriendlyError(error) {
   const errorName = [error.name, error.constructor.name].find(errorName => {
+    console.error(error);
     return errorName in USER_FRIENDLY_ERRORS;
   });
   return errorName ? USER_FRIENDLY_ERRORS[errorName](error) : error.message;

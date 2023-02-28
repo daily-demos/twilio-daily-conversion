@@ -17,43 +17,21 @@ const $joinRoomModal = $('#join-room', $modals);
 
 // ConnectOptions settings for a video web application.
 const connectOptions = {
-  // Available only in Small Group or Group Rooms only. Please set "Room Type"
-  // to "Group" or "Small Group" in your Twilio Console:
-  // https://www.twilio.com/console/video/configure
-  bandwidthProfile: {
-    video: {
-      dominantSpeakerPriority: 'high',
-      mode: 'collaboration',
-      clientTrackSwitchOffControl: 'auto',
-      contentPreferencesMode: 'auto'
-    }
+  // https://docs.daily.co/reference/daily-js/instance-methods/update-receive-settings#main
+  receiveSettings: {
+    base: { video: { layer: 'inherit' } }
   },
 
-  // Available only in Small Group or Group Rooms only. Please set "Room Type"
-  // to "Group" or "Small Group" in your Twilio Console:
-  // https://www.twilio.com/console/video/configure
-  dominantSpeaker: true,
-
-  // Comment this line if you are playing music.
-  maxAudioBitrate: 16000,
-
-  // VP8 simulcast enables the media server in a Small Group or Group Room
-  // to adapt your encoded video quality for each RemoteParticipant based on
-  // their individual bandwidth constraints. This has no utility if you are
-  // using Peer-to-Peer Rooms, so you can comment this line.
-  preferredVideoCodecs: [{ codec: 'VP8', simulcast: true }],
-
   // Capture 720p video @ 24 fps.
-  video: { height: 720, frameRate: 24, width: 1280 }
+  // https://docs.daily.co/reference/daily-js/instance-methods/set-bandwidth#main
+  userMediaVideoConstraints: { height: 720, frameRate: 24, width: 1280 },
 };
 
-// For mobile browsers, limit the maximum incoming video bitrate to 2.5 Mbps.
+// For mobile browsers, limit the maximum received simulcast
+// layer to layer 1.
 if (isMobile) {
-  connectOptions
-    .bandwidthProfile
-    .video
-    .maxSubscriptionBitrate = 2500000;
-}
+  connectOptions.receiveSettings.base.video.layer = 1;
+};
 
 // On mobile browsers, there is the possibility of not getting any media even
 // after the user has given permission, most likely due to some other app reserving
@@ -82,19 +60,22 @@ async function selectAndJoinRoom(error = null) {
 
   try {
     // Fetch an AccessToken to join the Room.
-    const response = await fetch(`/token?identity=${identity}`);
+    const response = await fetch(
+      `/token?identity=${identity}&roomName=${roomName}`
+    );
 
     // Extract the AccessToken from the Response.
-    const token = await response.text();
+    const data = await response.text();
+    const resObj = JSON.parse(data);
 
+    const token = resObj.token;
+    const roomURL = resObj.roomURL;
+    connectOptions.roomURL = roomURL;
     // Add the specified audio device ID to ConnectOptions.
-    connectOptions.audio = { deviceId: { exact: deviceIds.audio } };
-
-    // Add the specified Room name to ConnectOptions.
-    connectOptions.name = roomName;
+    connectOptions.audioDeviceId = deviceIds.audio;
 
     // Add the specified video device ID to ConnectOptions.
-    connectOptions.video.deviceId = { exact: deviceIds.video };
+    connectOptions.videoDeviceId = deviceIds.video;
 
     // Join the Room.
     await joinRoom(token, connectOptions);
